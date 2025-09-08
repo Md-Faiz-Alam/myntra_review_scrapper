@@ -1,236 +1,144 @@
-from flask import request
 from selenium import webdriver
-from selenium.webdriver.common.by import By
-from src.exception import CustomException
+from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup as bs
 import pandas as pd
-import os, sys
 import time
-from selenium.webdriver.chrome.options import Options
 from urllib.parse import quote
+import sys
+from src.exception import CustomException
+import chromedriver_binary  
 
 
 class ScrapeReviews:
-    def __init__(self,
-                 product_name:str,
-                 no_of_products:int):
-        options = Options()
-        # options.add_argument("--no-sandbox")
-        # options.add_argument("--disable-dev-shm-usage")
-        # options.add_argument('--headless')
-        
-        # Start a new Chrome browser session
-        self.driver = webdriver.Chrome(options=options)
+    def __init__(self, product_name: str, no_of_products: int):
+        try:
+            options = Options()
+            options.add_argument("--headless")  # run Chrome in headless mode
+            options.add_argument("--no-sandbox")
+            options.add_argument("--disable-dev-shm-usage")
+            options.add_argument("--disable-gpu")
+            options.add_argument("--window-size=1920,1080")
 
-        self.product_name = product_name
-        self.no_of_products = no_of_products
+            self.driver = webdriver.Chrome(options=options)
+
+            self.product_name = product_name
+            self.no_of_products = no_of_products
+        except Exception as e:
+            raise CustomException(e, sys)
 
     def scrape_product_urls(self, product_name):
         try:
-            search_string = product_name.replace(" ","-")
-            # no_of_products = int(self.request.form['prod_no'])
-
+            search_string = product_name.replace(" ", "-")
             encoded_query = quote(search_string)
-            # Navigate to the URL
-            self.driver.get(
-                f"https://www.myntra.com/{search_string}?rawQuery={encoded_query}"
-            )
-            myntra_text = self.driver.page_source
-            myntra_html = bs(myntra_text, "html.parser")
-            pclass = myntra_html.findAll("ul", {"class": "results-base"})
+            self.driver.get(f"https://www.myntra.com/{search_string}?rawQuery={encoded_query}")
+
+            page_html = bs(self.driver.page_source, "html.parser")
+            product_list = page_html.findAll("ul", {"class": "results-base"})
 
             product_urls = []
-            for i in pclass:
-                href = i.find_all("a", href=True)
-
-                for product_no in range(len(href)):
-                    t = href[product_no]["href"]
-                    product_urls.append(t)
+            for ul in product_list:
+                hrefs = ul.find_all("a", href=True)
+                for h in hrefs:
+                    product_urls.append(h["href"])
 
             return product_urls
-
         except Exception as e:
             raise CustomException(e, sys)
 
     def extract_reviews(self, product_link):
         try:
-            productLink = "https://www.myntra.com/" + product_link
-            self.driver.get(productLink)
-            prodRes = self.driver.page_source
-            prodRes_html = bs(prodRes, "html.parser")
-            title_h = prodRes_html.findAll("title")
+            url = "https://www.myntra.com/" + product_link
+            self.driver.get(url)
+            page_html = bs(self.driver.page_source, "html.parser")
 
-            self.product_title = title_h[0].text
-
-            overallRating = prodRes_html.findAll(
-                "div", {"class": "index-overallRating"}
-            )
-            for i in overallRating:
-                self.product_rating_value = i.find("div").text
-            price = prodRes_html.findAll("span", {"class": "pdp-price"})
-            for i in price:
-                self.product_price = i.text
-            product_reviews = prodRes_html.find(
-                "a", {"class": "detailed-reviews-allReviews"}
-            )
-
-            if not product_reviews:
+            # Extract product info
+            self.product_title = page_html.find("title").text
+            overall_rating = page_html.find("div", {"class": "index-overallRating"})
+            self.product_rating_value = overall_rating.find("div").text if overall_rating else "No Rating"
+            price = page_html.find("span", {"class": "pdp-price"})
+            self.product_price = price.text if price else "No Price"
+            reviews_link = page_html.find("a", {"class": "detailed-reviews-allReviews"})
+            if not reviews_link:
                 return None
-            return product_reviews
+            return reviews_link
         except Exception as e:
             raise CustomException(e, sys)
-        
+
     def scroll_to_load_reviews(self):
-        # Change the window size to load more data
-        self.driver.set_window_size(1920, 1080)  # Example window size, adjust as needed
+        try:
+            last_height = self.driver.execute_script("return document.body.scrollHeight")
+            while True:
+                self.driver.execute_script("window.scrollBy(0, 1000);")
+                time.sleep(2)
+                new_height = self.driver.execute_script("return document.body.scrollHeight")
+                if new_height == last_height:
+                    break
+                last_height = new_height
+        except Exception as e:
+            raise CustomException(e, sys)
 
-        # Get the initial height of the page
-        last_height = self.driver.execute_script("return document.body.scrollHeight")
-        
-        # Scroll in smaller increments, waiting between scrolls
-        while True:
-            # Scroll down by a small amount
-            self.driver.execute_script("window.scrollBy(0, 1000);")
-            time.sleep(3)  # Adjust this delay if needed
-            
-            # Calculate the new height after scrolling
-            new_height = self.driver.execute_script("return document.body.scrollHeight")
-            
-            # Break the loop if no new content is loaded after scrolling
-            if new_height == last_height:
-                break
-            
-            # Update the last height for the next iteration
-            last_height = new_height
-
-
-
-    def extract_products(self, product_reviews: list):
+    def extract_products(self, product_reviews):
         try:
             t2 = product_reviews["href"]
-            Review_link = "https://www.myntra.com" + t2
-            self.driver.get(Review_link)
-            
+            review_url = "https://www.myntra.com" + t2
+            self.driver.get(review_url)
+
             self.scroll_to_load_reviews()
-            
-            review_page = self.driver.page_source
-
-            review_html = bs(review_page, "html.parser")
-            review = review_html.findAll(
-                "div", {"class": "detailed-reviews-userReviewsContainer"}
-            )
-
-            for i in review:
-                user_rating = i.findAll(
-                    "div", {"class": "user-review-main user-review-showRating"}
-                )
-                user_comment = i.findAll(
-                    "div", {"class": "user-review-reviewTextWrapper"}
-                )
-                user_name = i.findAll("div", {"class": "user-review-left"})
+            page_html = bs(self.driver.page_source, "html.parser")
+            review_containers = page_html.findAll("div", {"class": "detailed-reviews-userReviewsContainer"})
 
             reviews = []
-            for i in range(len(user_rating)):
+            for container in review_containers:
                 try:
-                    rating = (
-                        user_rating[i]
-                        .find("span", class_="user-review-starRating")
-                        .get_text()
-                        .strip()
-                    )
+                    rating = container.find("span", class_="user-review-starRating").get_text(strip=True)
                 except:
                     rating = "No rating Given"
                 try:
-                    comment = user_comment[i].text
+                    comment = container.find("div", {"class": "user-review-reviewTextWrapper"}).text
                 except:
                     comment = "No comment Given"
                 try:
-                    name = user_name[i].find("span").text
+                    name_span = container.find("div", {"class": "user-review-left"}).find_all("span")
+                    name = name_span[0].text if len(name_span) > 0 else "No Name given"
+                    date = name_span[1].text if len(name_span) > 1 else "No Date given"
                 except:
                     name = "No Name given"
-                try:
-                    date = user_name[i].find_all("span")[1].text
-                except:
                     date = "No Date given"
 
-                mydict = {
+                reviews.append({
                     "Product Name": self.product_title,
                     "Over_All_Rating": self.product_rating_value,
                     "Price": self.product_price,
                     "Date": date,
                     "Rating": rating,
                     "Name": name,
-                    "Comment": comment,
-                }
-                reviews.append(mydict)
+                    "Comment": comment
+                })
 
-            review_data = pd.DataFrame(
-                reviews,
-                columns=[
-                    "Product Name",
-                    "Over_All_Rating",
-                    "Price",
-                    "Date",
-                    "Rating",
-                    "Name",
-                    "Comment",
-                ],
-            )
-
-            return review_data
-
+            return pd.DataFrame(reviews)
         except Exception as e:
             raise CustomException(e, sys)
-        
-    
-    def skip_products(self, search_string, no_of_products, skip_index):
-        product_urls: list = self.scrape_product_urls(search_string, no_of_products + 1)
-
-        product_urls.pop(skip_index)
 
     def get_review_data(self) -> pd.DataFrame:
         try:
-            # search_string = self.request.form["content"].replace(" ", "-")
-            # no_of_products = int(self.request.form["prod_no"])
+            product_urls = self.scrape_product_urls(self.product_name)
+            all_reviews = []
 
-            product_urls = self.scrape_product_urls(product_name=self.product_name)
-
-            
-
-            product_details = []
-
-            review_len = 0
-
-
-            while review_len < self.no_of_products:
-                product_url = product_urls[review_len]
-                review = self.extract_reviews(product_url)
-
-                if review:
-                    product_detail = self.extract_products(review)
-                    product_details.append(product_detail)
-
-                    review_len += 1
+            review_count = 0
+            while review_count < self.no_of_products:
+                product_url = product_urls[review_count]
+                review_link = self.extract_reviews(product_url)
+                if review_link:
+                    df = self.extract_products(review_link)
+                    all_reviews.append(df)
+                    review_count += 1
                 else:
-                    product_urls.pop(review_len)
+                    product_urls.pop(review_count)
 
             self.driver.quit()
-
-            data = pd.concat(product_details, axis=0)
-            
+            data = pd.concat(all_reviews, axis=0)
             data.to_csv("data.csv", index=False)
-            
             return data
-            
-            
-                
-            # columns = data.columns
-
-            # values = [[data.loc[i, col] for col in data.columns ] for i in range(len(data)) ]
-            
-            # return columns, values
-        
-    
-
         except Exception as e:
             raise CustomException(e, sys)
+
