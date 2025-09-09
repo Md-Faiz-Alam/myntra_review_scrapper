@@ -10,6 +10,7 @@ import os, sys
 import time
 from selenium.webdriver.chrome.options import Options
 from urllib.parse import quote
+import shutil
 
 
 class ScrapeReviews:
@@ -19,8 +20,11 @@ class ScrapeReviews:
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
 
-        # Use system-installed chromium + chromedriver
-        service = Service("/usr/bin/chromedriver")
+        # safer chromedriver handling
+        chromedriver_path = shutil.which("chromedriver")
+        if not chromedriver_path:
+            raise Exception("Chromedriver not found in system PATH.")
+        service = Service(chromedriver_path)
         self.driver = webdriver.Chrome(service=service, options=options)
 
         self.product_name = product_name
@@ -190,37 +194,34 @@ class ScrapeReviews:
 
     def get_review_data(self) -> pd.DataFrame:
         try:
-            # search_string = self.request.form["content"].replace(" ", "-")
-            # no_of_products = int(self.request.form["prod_no"])
-
             product_urls = self.scrape_product_urls(product_name=self.product_name)
 
-            
-
             product_details = []
-
             review_len = 0
 
+            # Use min() to avoid overshooting available URLs
+            max_products = min(self.no_of_products, len(product_urls))
 
-            while review_len < self.no_of_products:
+            while review_len < max_products:
                 product_url = product_urls[review_len]
                 review = self.extract_reviews(product_url)
 
                 if review:
                     product_detail = self.extract_products(review)
                     product_details.append(product_detail)
-
                     review_len += 1
                 else:
-                    product_urls.pop(review_len)
+                    # If no review, just skip this product instead of popping
+                    review_len += 1
 
             self.driver.quit()
 
-            data = pd.concat(product_details, axis=0)
-            
-            data.to_csv("data.csv", index=False)
-            
-            return data
+            if product_details:  # ensure we have something to concatenate
+                data = pd.concat(product_details, axis=0)
+                data.to_csv("data.csv", index=False)
+                return data
+            else:
+                return pd.DataFrame() 
             
             
                 
