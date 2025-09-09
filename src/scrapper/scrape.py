@@ -1,6 +1,8 @@
 from flask import request
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 from src.exception import CustomException
 from bs4 import BeautifulSoup as bs
 import pandas as pd
@@ -11,16 +13,18 @@ from urllib.parse import quote
 
 
 class ScrapeReviews:
-    def __init__(self,
-                 product_name:str,
-                 no_of_products:int):
+    def __init__(self, product_name: str, no_of_products: int):
         options = Options()
-        options.add_argument("--no-sandbox")
+        options.add_argument("--headless=new")       # new headless mode
+        options.add_argument("--no-sandbox")        # required in cloud
         options.add_argument("--disable-dev-shm-usage")
-        options.add_argument('--headless')
-        
-        # Start a new Chrome browser session
-        self.driver = webdriver.Chrome(options=options)
+        options.add_argument("--disable-gpu")
+        options.add_argument("--disable-extensions")
+        options.add_argument("--remote-debugging-port=9222")  # prevents crash
+
+        # Use webdriver-manager to install matching ChromeDriver
+        service = Service(ChromeDriverManager().install())
+        self.driver = webdriver.Chrome(service=service, options=options)
 
         self.product_name = product_name
         self.no_of_products = no_of_products
