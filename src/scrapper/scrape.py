@@ -112,9 +112,16 @@ class ScrapeReviews:
     def get_review_data(self) -> pd.DataFrame:
         try:
             product_urls = self.scrape_product_urls(product_name=self.product_name)
+
+            if not product_urls:
+                print("⚠️ No products found for the search term.")
+                self.driver.quit()
+                return pd.DataFrame()
+
             product_details = []
             review_len = 0
 
+            # Safely limit the number of products to available URLs
             max_products = min(self.no_of_products, len(product_urls))
 
             while review_len < max_products:
@@ -125,6 +132,7 @@ class ScrapeReviews:
                     product_detail = self.fetch_reviews_api(product_id, pages=5)
                     if not product_detail.empty:
                         product_details.append(product_detail)
+
                 review_len += 1
 
             self.driver.quit()
@@ -138,4 +146,5 @@ class ScrapeReviews:
                 return pd.DataFrame()
 
         except Exception as e:
+            self.driver.quit()
             raise CustomException(e, sys)
