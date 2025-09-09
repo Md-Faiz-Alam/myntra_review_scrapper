@@ -1,0 +1,15 @@
+libglib2.0-0
+libnss3
+libnspr4
+libxss1
+libasound2
+libatk1.0-0
+libgtk-3-0
+libx11-6
+libgdk-pixbuf2.0-0
+libxcomposite1
+libxtst6
+libgbm1
+libxrandr2
+libatk-bridge2.0-0
+libatspi2.0-0
