@@ -15,14 +15,12 @@ from urllib.parse import quote
 class ScrapeReviews:
     def __init__(self, product_name: str, no_of_products: int):
         options = Options()
-        options.add_argument("--headless=new")       # new headless mode
-        options.add_argument("--no-sandbox")        # required in cloud
+        options.add_argument("--headless=new")
+        options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
-        options.add_argument("--disable-extensions")
-        options.add_argument("--remote-debugging-port=9222")  # prevents crash
 
-        # Use webdriver-manager to install matching ChromeDriver
+        # Explicitly point to system-installed Chrome
         service = Service(ChromeDriverManager().install())
         self.driver = webdriver.Chrome(service=service, options=options)
 
