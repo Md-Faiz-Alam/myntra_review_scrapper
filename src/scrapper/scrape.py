@@ -27,24 +27,23 @@ class ScrapeReviews:
 
     def scrape_product_urls(self, product_name):
         try:
-            search_string = product_name.replace(" ","-")
-            # no_of_products = int(self.request.form['prod_no'])
-
+            search_string = product_name.replace(" ", "-")
             encoded_query = quote(search_string)
-            # Navigate to the URL
             self.driver.get(
                 f"https://www.myntra.com/{search_string}?rawQuery={encoded_query}"
             )
             myntra_text = self.driver.page_source
             myntra_html = bs(myntra_text, "html.parser")
-            pclass = myntra_html.findAll("ul", {"class": "results-base"})
+
+            # Find all product containers
+            product_containers = myntra_html.findAll("div", {"class": "product-base"})
 
             product_urls = []
-            for i in pclass:
-                href = i.find_all("a", href=True)
-
-                for product_no in range(len(href)):
-                    t = href[product_no]["href"]
+            for container in product_containers:
+                # Find the first 'a' tag within each product container
+                href_tag = container.find("a", href=True)
+                if href_tag:
+                    t = href_tag["href"]
                     product_urls.append(t)
 
             return product_urls
