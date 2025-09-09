@@ -13,15 +13,14 @@ from urllib.parse import quote
 
 
 class ScrapeReviews:
-    def __init__(self, product_name: str, no_of_products: int):
-        options = Options()
-        options.add_argument("--headless=new")
+    def __init__(self, product_name, no_of_products):
+        options = webdriver.ChromeOptions()
+        options.add_argument("--headless")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
-        options.add_argument("--disable-gpu")
 
-        # Explicitly point to system-installed Chrome
-        service = Service(ChromeDriverManager().install())
+        # Use system-installed chromium + chromedriver
+        service = Service("/usr/bin/chromedriver")
         self.driver = webdriver.Chrome(service=service, options=options)
 
         self.product_name = product_name
